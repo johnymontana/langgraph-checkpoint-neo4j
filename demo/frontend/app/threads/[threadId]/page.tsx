@@ -64,9 +64,9 @@ export default function ThreadPage() {
     }
   }
 
-  function handleTimeTravel() {
-    // Reload messages after time travel
-    loadData();
+  function handleTimeTravel(restoredMessages: Message[]) {
+    // Update messages with the restored state
+    setMessages(restoredMessages);
     setShowHistory(false);
   }
 
@@ -101,9 +101,7 @@ export default function ThreadPage() {
             </IconButton>
             <HStack gap="2">
               <LuMessageSquare />
-              <Heading size="md">
-                {threadId.slice(0, 8)}...
-              </Heading>
+              <Heading size="md">{threadId.slice(0, 8)}...</Heading>
             </HStack>
           </HStack>
           <HStack gap="2">

@@ -67,9 +67,50 @@ class CheckpointDetail(BaseModel):
 
 
 class TimeTravelRequest(BaseModel):
-    """Request model for time travel."""
+    """Request model for time travel (now forks instead of deleting)."""
 
     checkpoint_id: str
+    branch_name: str | None = None  # Optional name for the new branch
+
+
+class Branch(BaseModel):
+    """Response model for a branch."""
+
+    branch_id: str
+    name: str
+    created_at: datetime
+    fork_point_id: str | None = None
+    is_active: bool = False
+    head_checkpoint_id: str | None = None
+
+
+class ForkRequest(BaseModel):
+    """Request model for forking a branch."""
+
+    checkpoint_id: str
+    name: str | None = None  # Optional name for the new branch
+
+
+class SwitchBranchRequest(BaseModel):
+    """Request model for switching branches."""
+
+    branch_id: str
+
+
+class CheckpointTreeNode(BaseModel):
+    """A node in the checkpoint tree."""
+
+    checkpoint_id: str
+    parent_id: str | None = None
+    branch_id: str | None = None
+    branch_name: str | None = None
+
+
+class CheckpointTree(BaseModel):
+    """Full checkpoint tree for visualization."""
+
+    nodes: list[CheckpointTreeNode]
+    branches: list[Branch]
 
 
 class HealthResponse(BaseModel):

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  Badge,
   Box,
   Button,
   Card,
@@ -12,14 +13,25 @@ import {
   Stack,
   Text,
 } from "@chakra-ui/react";
-import { LuClock, LuHistory, LuRefreshCw, LuX } from "react-icons/lu";
-import type { Checkpoint } from "@/lib/types";
-import { listCheckpoints, timeTravel } from "@/lib/api";
+import {
+  LuClock,
+  LuGitBranch,
+  LuHistory,
+  LuRefreshCw,
+  LuX,
+} from "react-icons/lu";
+import type { Branch, Checkpoint, Message } from "@/lib/types";
+import {
+  listCheckpoints,
+  listBranches,
+  switchBranch,
+  timeTravel,
+} from "@/lib/api";
 
 interface HistoryTimelineProps {
   threadId: string;
   onClose: () => void;
-  onTimeTravel: () => void;
+  onTimeTravel: (messages: Message[]) => void;
 }
 
 export function HistoryTimeline({
@@ -28,42 +40,62 @@ export function HistoryTimeline({
   onTimeTravel,
 }: HistoryTimelineProps) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [switchingBranch, setSwitchingBranch] = useState<string | null>(null);
 
   useEffect(() => {
-    loadCheckpoints();
+    loadData();
   }, [threadId]);
 
-  async function loadCheckpoints() {
+  async function loadData() {
     setLoading(true);
     try {
-      const data = await listCheckpoints(threadId);
-      setCheckpoints(data);
+      const [checkpointData, branchData] = await Promise.all([
+        listCheckpoints(threadId),
+        listBranches(threadId),
+      ]);
+      setCheckpoints(checkpointData);
+      setBranches(branchData);
     } catch (error) {
-      console.error("Failed to load checkpoints:", error);
+      console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
     }
   }
 
   async function handleRestore(checkpointId: string) {
-    if (
-      !confirm(
-        "Restore conversation to this checkpoint? Current state will be preserved as a new branch.",
-      )
-    ) {
+    const confirmMsg =
+      "Fork from this checkpoint? This will create a new branch and switch to it.";
+    if (!confirm(confirmMsg)) {
       return;
     }
 
     setRestoring(checkpointId);
     try {
-      await timeTravel(threadId, checkpointId);
-      onTimeTravel();
+      const result = await timeTravel(threadId, checkpointId);
+      onTimeTravel(result.messages);
+      // Reload data to show the new branch
+      loadData();
     } catch (error) {
-      console.error("Failed to restore checkpoint:", error);
+      console.error("Failed to fork from checkpoint:", error);
     } finally {
       setRestoring(null);
+    }
+  }
+
+  async function handleSwitchBranch(branchId: string) {
+    setSwitchingBranch(branchId);
+    try {
+      const result = await switchBranch(threadId, branchId);
+      onTimeTravel(result.messages);
+      // Reload data to update active branch
+      loadData();
+    } catch (error) {
+      console.error("Failed to switch branch:", error);
+    } finally {
+      setSwitchingBranch(null);
     }
   }
 
@@ -74,6 +106,8 @@ export function HistoryTimeline({
   function getStepNumber(index: number) {
     return checkpoints.length - index;
   }
+
+  const activeBranch = branches.find((b) => b.is_active);
 
   return (
     <Box
@@ -94,7 +128,7 @@ export function HistoryTimeline({
             aria-label="Refresh"
             variant="ghost"
             size="sm"
-            onClick={loadCheckpoints}
+            onClick={loadData}
           >
             <LuRefreshCw />
           </IconButton>
@@ -113,59 +147,132 @@ export function HistoryTimeline({
         {loading ? (
           <Stack align="center" py="8">
             <Spinner />
-            <Text color="fg.muted">Loading checkpoints...</Text>
-          </Stack>
-        ) : checkpoints.length === 0 ? (
-          <Stack align="center" py="8">
-            <LuClock size={32} />
-            <Text color="fg.muted" textAlign="center">
-              No checkpoints yet.
-              <br />
-              Send a message to create one.
-            </Text>
+            <Text color="fg.muted">Loading history...</Text>
           </Stack>
         ) : (
-          <Stack gap="3">
-            {checkpoints.map((checkpoint, index) => (
-              <Card.Root key={checkpoint.checkpoint_id} size="sm">
-                <Card.Body py="2" px="3">
-                  <Stack gap="2">
-                    <HStack justify="space-between">
-                      <Text fontWeight="medium" textStyle="sm">
-                        Step {getStepNumber(index)}
-                      </Text>
-                      {index > 0 && (
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() =>
-                            handleRestore(checkpoint.checkpoint_id)
-                          }
-                          loading={restoring === checkpoint.checkpoint_id}
-                        >
-                          Restore
-                        </Button>
-                      )}
-                      {index === 0 && (
-                        <Text
-                          textStyle="xs"
-                          color="green.500"
-                          fontWeight="medium"
-                        >
-                          Current
-                        </Text>
-                      )}
-                    </HStack>
-                    <Text textStyle="xs" color="fg.muted">
-                      {formatDate(checkpoint.timestamp)}
+          <Stack gap="4">
+            {/* Branch Selector */}
+            {branches.length > 0 && (
+              <Box>
+                <HStack gap="2" mb="2">
+                  <LuGitBranch />
+                  <Text fontWeight="medium" textStyle="sm">
+                    Branches ({branches.length})
+                  </Text>
+                </HStack>
+                <Stack gap="2">
+                  {branches.map((branch) => (
+                    <Card.Root
+                      key={branch.branch_id}
+                      size="sm"
+                      variant={branch.is_active ? "elevated" : "outline"}
+                      borderColor={branch.is_active ? "green.500" : undefined}
+                      borderWidth={branch.is_active ? "2px" : "1px"}
+                    >
+                      <Card.Body py="2" px="3">
+                        <HStack justify="space-between">
+                          <Stack gap="0">
+                            <HStack gap="2">
+                              <Text fontWeight="medium" textStyle="sm">
+                                {branch.name}
+                              </Text>
+                              {branch.is_active && (
+                                <Badge colorPalette="green" size="sm">
+                                  Active
+                                </Badge>
+                              )}
+                            </HStack>
+                            {branch.fork_point_id && (
+                              <Text textStyle="xs" color="fg.muted">
+                                Forked from {branch.fork_point_id.slice(0, 8)}
+                                ...
+                              </Text>
+                            )}
+                          </Stack>
+                          {!branch.is_active && (
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() =>
+                                handleSwitchBranch(branch.branch_id)
+                              }
+                              loading={switchingBranch === branch.branch_id}
+                            >
+                              Switch
+                            </Button>
+                          )}
+                        </HStack>
+                      </Card.Body>
+                    </Card.Root>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            {/* Checkpoints */}
+            <Box>
+              <HStack gap="2" mb="2">
+                <LuClock />
+                <Text fontWeight="medium" textStyle="sm">
+                  Checkpoints
+                  {activeBranch && (
+                    <Text as="span" color="fg.muted" fontWeight="normal">
+                      {" "}
+                      on {activeBranch.name}
                     </Text>
-                    <Text textStyle="xs" color="fg.muted" truncate>
-                      ID: {checkpoint.checkpoint_id.slice(0, 16)}...
-                    </Text>
-                  </Stack>
-                </Card.Body>
-              </Card.Root>
-            ))}
+                  )}
+                </Text>
+              </HStack>
+
+              {checkpoints.length === 0 ? (
+                <Stack align="center" py="8">
+                  <Text color="fg.muted" textAlign="center">
+                    No checkpoints yet.
+                    <br />
+                    Send a message to create one.
+                  </Text>
+                </Stack>
+              ) : (
+                <Stack gap="2">
+                  {checkpoints.map((checkpoint, index) => (
+                    <Card.Root key={checkpoint.checkpoint_id} size="sm">
+                      <Card.Body py="2" px="3">
+                        <Stack gap="1">
+                          <HStack justify="space-between">
+                            <Text fontWeight="medium" textStyle="sm">
+                              Step {getStepNumber(index)}
+                            </Text>
+                            {index > 0 && (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() =>
+                                  handleRestore(checkpoint.checkpoint_id)
+                                }
+                                loading={restoring === checkpoint.checkpoint_id}
+                              >
+                                Fork
+                              </Button>
+                            )}
+                            {index === 0 && (
+                              <Badge colorPalette="blue" size="sm">
+                                HEAD
+                              </Badge>
+                            )}
+                          </HStack>
+                          <Text textStyle="xs" color="fg.muted">
+                            {formatDate(checkpoint.timestamp)}
+                          </Text>
+                          <Text textStyle="xs" color="fg.muted" truncate>
+                            {checkpoint.checkpoint_id.slice(0, 20)}...
+                          </Text>
+                        </Stack>
+                      </Card.Body>
+                    </Card.Root>
+                  ))}
+                </Stack>
+              )}
+            </Box>
           </Stack>
         )}
       </Box>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
@@ -17,19 +18,25 @@ from langgraph.checkpoint.base import (
 
 from langgraph.checkpoint.neo4j._internal import create_driver, get_session
 from langgraph.checkpoint.neo4j.base import (
+    CYPHER_CREATE_BRANCH_CONSTRAINT,
+    CYPHER_CREATE_BRANCH_NAME_INDEX,
     CYPHER_CREATE_CHANNEL_STATE_CONSTRAINT,
     CYPHER_CREATE_CHECKPOINT_CONSTRAINT,
     CYPHER_CREATE_CHECKPOINT_CREATED_INDEX,
     CYPHER_CREATE_CHECKPOINT_ID_INDEX,
+    CYPHER_CREATE_MAIN_BRANCH,
     CYPHER_CREATE_THREAD_CONSTRAINT,
     CYPHER_DELETE_ORPHAN_CHANNEL_STATES,
     CYPHER_DELETE_THREAD,
+    CYPHER_GET_ACTIVE_BRANCH_HEAD,
     CYPHER_GET_CHANNEL_STATES,
     CYPHER_GET_CHECKPOINT_BY_ID,
     CYPHER_GET_LATEST_CHECKPOINT,
     CYPHER_GET_WRITES,
     CYPHER_LINK_PARENT_CHECKPOINT,
     CYPHER_LIST_CHECKPOINTS,
+    CYPHER_THREAD_HAS_BRANCHES,
+    CYPHER_UPDATE_BRANCH_HEAD,
     CYPHER_UPSERT_CHANNEL_STATE,
     CYPHER_UPSERT_CHECKPOINT_SIMPLE,
     CYPHER_UPSERT_WRITE,
@@ -142,7 +149,8 @@ class Neo4jSaver(BaseNeo4jSaver):
         """Create indexes and constraints in Neo4j.
 
         This method should be called once before using the checkpointer.
-        It creates the necessary indexes and constraints for the graph model.
+        It creates the necessary indexes and constraints for the graph model,
+        including branch-related constraints for time-travel functionality.
         """
         with self._lock:
             with get_session(self._driver, self._database) as session:
@@ -150,9 +158,12 @@ class Neo4jSaver(BaseNeo4jSaver):
                 session.run(CYPHER_CREATE_THREAD_CONSTRAINT)
                 session.run(CYPHER_CREATE_CHECKPOINT_CONSTRAINT)
                 session.run(CYPHER_CREATE_CHANNEL_STATE_CONSTRAINT)
+                # Create branch-related constraints
+                session.run(CYPHER_CREATE_BRANCH_CONSTRAINT)
                 # Create indexes
                 session.run(CYPHER_CREATE_CHECKPOINT_ID_INDEX)
                 session.run(CYPHER_CREATE_CHECKPOINT_CREATED_INDEX)
+                session.run(CYPHER_CREATE_BRANCH_NAME_INDEX)
 
     def put(
         self,
@@ -165,7 +176,8 @@ class Neo4jSaver(BaseNeo4jSaver):
 
         Creates Thread and Checkpoint nodes with HAS_CHECKPOINT relationship,
         links to parent via PREVIOUS relationship, and stores channel states
-        with HAS_CHANNEL relationships.
+        with HAS_CHANNEL relationships. Also manages branch tracking for
+        time-travel functionality.
 
         Args:
             config: The runnable configuration containing thread_id.
@@ -226,6 +238,38 @@ class Neo4jSaver(BaseNeo4jSaver):
                         },
                     )
 
+                # Step 4: Handle branch management
+                # Check if thread has any branches
+                branch_result = session.run(
+                    CYPHER_THREAD_HAS_BRANCHES,
+                    {
+                        "thread_id": thread_id,
+                        "checkpoint_ns": checkpoint_ns,
+                    },
+                )
+                branch_record = branch_result.single()
+
+                if branch_record and branch_record["branch_count"] == 0:
+                    # No branches exist, create main branch
+                    session.run(
+                        CYPHER_CREATE_MAIN_BRANCH,
+                        {
+                            "thread_id": thread_id,
+                            "checkpoint_ns": checkpoint_ns,
+                            "branch_id": str(uuid.uuid4()),
+                        },
+                    )
+
+                # Update the active branch HEAD to point to this checkpoint
+                session.run(
+                    CYPHER_UPDATE_BRANCH_HEAD,
+                    {
+                        "thread_id": thread_id,
+                        "checkpoint_ns": checkpoint_ns,
+                        "checkpoint_id": checkpoint_id,
+                    },
+                )
+
         return {
             "configurable": {
                 "thread_id": thread_id,
@@ -279,7 +323,8 @@ class Neo4jSaver(BaseNeo4jSaver):
         """Retrieve a checkpoint tuple by configuration.
 
         Traverses the graph model from Thread -> Checkpoint -> ChannelStates
-        to retrieve all data.
+        to retrieve all data. When no checkpoint_id is specified, retrieves
+        the HEAD of the active branch (instead of lexicographic latest).
 
         Args:
             config: The runnable configuration with thread_id and optional checkpoint_id.
@@ -302,15 +347,28 @@ class Neo4jSaver(BaseNeo4jSaver):
                         },
                     )
                 else:
+                    # Try to get active branch HEAD first
                     result = session.run(
-                        CYPHER_GET_LATEST_CHECKPOINT,
+                        CYPHER_GET_ACTIVE_BRANCH_HEAD,
                         {
                             "thread_id": thread_id,
                             "checkpoint_ns": checkpoint_ns,
                         },
                     )
+                    record = result.single()
+                    # Fallback to latest checkpoint if no branches exist yet
+                    if not record:
+                        result = session.run(
+                            CYPHER_GET_LATEST_CHECKPOINT,
+                            {
+                                "thread_id": thread_id,
+                                "checkpoint_ns": checkpoint_ns,
+                            },
+                        )
 
-                record = result.single()
+                if checkpoint_id:
+                    record = result.single()
+
                 if not record:
                     return None
 

@@ -727,3 +727,293 @@ class TestNeo4jSaver:
             assert record["threads"] == 0, "Thread should be deleted"
             assert record["checkpoints"] == 0, "Checkpoints should be deleted"
             assert record["writes"] == 0, "PendingWrites should be deleted"
+
+    def test_branch_created_on_first_checkpoint(
+        self,
+        clean_neo4j_saver: Neo4jSaver,
+        sample_checkpoint: dict,
+        sample_metadata: dict,
+    ) -> None:
+        """Test that a 'main' branch is created when first checkpoint is stored."""
+        thread_id = f"test-thread-{uuid.uuid4()}"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+
+        # Store checkpoint
+        clean_neo4j_saver.put(config, sample_checkpoint, sample_metadata, {})
+
+        # Verify Branch node was created
+        with clean_neo4j_saver._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (t:Thread {thread_id: $thread_id})-[:HAS_BRANCH]->(b:Branch)
+                OPTIONAL MATCH (t)-[:ACTIVE_BRANCH]->(active:Branch)
+                RETURN b.name as name, b.branch_id as branch_id,
+                       active.branch_id = b.branch_id as is_active
+                """,
+                {"thread_id": thread_id},
+            )
+            record = result.single()
+
+            assert record is not None, "Branch should be created"
+            assert record["name"] == "main", "First branch should be named 'main'"
+            assert record["is_active"], "Main branch should be the active branch"
+
+    def test_branch_head_updated_on_checkpoint(
+        self,
+        clean_neo4j_saver: Neo4jSaver,
+    ) -> None:
+        """Test that branch HEAD is updated when new checkpoints are added."""
+        thread_id = f"test-thread-{uuid.uuid4()}"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+
+        # Store first checkpoint
+        checkpoint_1 = {
+            "v": 1,
+            "id": "cp-1",
+            "ts": "2024-01-01T00:00:00Z",
+            "channel_values": {},
+            "channel_versions": {},
+            "versions_seen": {},
+            "pending_sends": [],
+        }
+        metadata = {"source": "input", "step": 0, "writes": {}, "parents": {}}
+        result_config = clean_neo4j_saver.put(config, checkpoint_1, metadata, {})
+
+        # Verify HEAD points to cp-1
+        with clean_neo4j_saver._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (t:Thread {thread_id: $thread_id})
+                      -[:ACTIVE_BRANCH]->(b:Branch)
+                      -[:HEAD]->(c:Checkpoint)
+                RETURN c.checkpoint_id as head_id
+                """,
+                {"thread_id": thread_id},
+            )
+            record = result.single()
+            assert record is not None
+            assert record["head_id"] == "cp-1"
+
+        # Store second checkpoint
+        checkpoint_2 = {
+            "v": 1,
+            "id": "cp-2",
+            "ts": "2024-01-01T00:01:00Z",
+            "channel_values": {},
+            "channel_versions": {},
+            "versions_seen": {},
+            "pending_sends": [],
+        }
+        config_2 = {
+            "configurable": {
+                "thread_id": thread_id,
+                "checkpoint_ns": "",
+                "checkpoint_id": "cp-1",
+            }
+        }
+        clean_neo4j_saver.put(config_2, checkpoint_2, metadata, {})
+
+        # Verify HEAD now points to cp-2
+        with clean_neo4j_saver._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (t:Thread {thread_id: $thread_id})
+                      -[:ACTIVE_BRANCH]->(b:Branch)
+                      -[:HEAD]->(c:Checkpoint)
+                RETURN c.checkpoint_id as head_id
+                """,
+                {"thread_id": thread_id},
+            )
+            record = result.single()
+            assert record is not None
+            assert record["head_id"] == "cp-2", "HEAD should be updated to latest checkpoint"
+
+    def test_checkpoint_linked_to_branch(
+        self,
+        clean_neo4j_saver: Neo4jSaver,
+        sample_checkpoint: dict,
+        sample_metadata: dict,
+    ) -> None:
+        """Test that checkpoints are linked to their branch via ON_BRANCH relationship."""
+        thread_id = f"test-thread-{uuid.uuid4()}"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+
+        # Store checkpoint
+        clean_neo4j_saver.put(config, sample_checkpoint, sample_metadata, {})
+
+        # Verify ON_BRANCH relationship exists
+        with clean_neo4j_saver._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (c:Checkpoint {checkpoint_id: $checkpoint_id})
+                      -[:ON_BRANCH]->(b:Branch)
+                RETURN b.name as branch_name
+                """,
+                {"checkpoint_id": sample_checkpoint["id"]},
+            )
+            record = result.single()
+
+            assert record is not None, "Checkpoint should be linked to branch via ON_BRANCH"
+            assert record["branch_name"] == "main"
+
+    def test_get_tuple_uses_active_branch_head(
+        self,
+        clean_neo4j_saver: Neo4jSaver,
+    ) -> None:
+        """Test that get_tuple without checkpoint_id returns active branch HEAD."""
+        thread_id = f"test-thread-{uuid.uuid4()}"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+
+        # Store multiple checkpoints
+        for i in range(3):
+            checkpoint = {
+                "v": 1,
+                "id": f"cp-{i}",
+                "ts": f"2024-01-0{i + 1}T00:00:00Z",
+                "channel_values": {"step": i},
+                "channel_versions": {"step": f"{i + 1:032}.{0:016}"},
+                "versions_seen": {},
+                "pending_sends": [],
+            }
+            metadata = {"source": "loop", "step": i, "writes": {}, "parents": {}}
+            result = clean_neo4j_saver.put(config, checkpoint, metadata, {})
+            config = {
+                "configurable": {
+                    "thread_id": thread_id,
+                    "checkpoint_ns": "",
+                    "checkpoint_id": result["configurable"]["checkpoint_id"],
+                }
+            }
+
+        # Get without checkpoint_id should return HEAD of active branch (cp-2)
+        latest_config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+        tuple_ = clean_neo4j_saver.get_tuple(latest_config)
+
+        assert tuple_ is not None
+        assert tuple_.checkpoint["id"] == "cp-2", "Should return active branch HEAD"
+
+    def test_multiple_branches_on_thread(
+        self,
+        clean_neo4j_saver: Neo4jSaver,
+    ) -> None:
+        """Test creating multiple branches on a thread."""
+        from langgraph.checkpoint.neo4j.base import CYPHER_CREATE_BRANCH
+
+        thread_id = f"test-thread-{uuid.uuid4()}"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+
+        # Store initial checkpoint (creates main branch)
+        checkpoint = {
+            "v": 1,
+            "id": "cp-main",
+            "ts": "2024-01-01T00:00:00Z",
+            "channel_values": {},
+            "channel_versions": {},
+            "versions_seen": {},
+            "pending_sends": [],
+        }
+        metadata = {"source": "input", "step": 0, "writes": {}, "parents": {}}
+        clean_neo4j_saver.put(config, checkpoint, metadata, {})
+
+        # Create a second branch
+        with clean_neo4j_saver._driver.session() as session:
+            session.run(
+                CYPHER_CREATE_BRANCH,
+                {
+                    "thread_id": thread_id,
+                    "checkpoint_ns": "",
+                    "branch_id": "fork-branch-1",
+                    "name": "experiment",
+                    "fork_point_id": "cp-main",
+                },
+            )
+
+        # Verify both branches exist
+        with clean_neo4j_saver._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (t:Thread {thread_id: $thread_id})-[:HAS_BRANCH]->(b:Branch)
+                RETURN b.name as name ORDER BY b.name
+                """,
+                {"thread_id": thread_id},
+            )
+            branches = [r["name"] for r in result]
+
+            assert len(branches) == 2
+            assert "main" in branches
+            assert "experiment" in branches
+
+    def test_switch_active_branch(
+        self,
+        clean_neo4j_saver: Neo4jSaver,
+    ) -> None:
+        """Test switching the active branch for a thread."""
+        from langgraph.checkpoint.neo4j.base import (
+            CYPHER_CREATE_BRANCH,
+            CYPHER_SET_ACTIVE_BRANCH,
+        )
+
+        thread_id = f"test-thread-{uuid.uuid4()}"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+
+        # Store checkpoint (creates main branch)
+        checkpoint = {
+            "v": 1,
+            "id": "cp-main",
+            "ts": "2024-01-01T00:00:00Z",
+            "channel_values": {},
+            "channel_versions": {},
+            "versions_seen": {},
+            "pending_sends": [],
+        }
+        metadata = {"source": "input", "step": 0, "writes": {}, "parents": {}}
+        clean_neo4j_saver.put(config, checkpoint, metadata, {})
+
+        # Create second branch
+        fork_branch_id = "fork-branch-switch"
+        with clean_neo4j_saver._driver.session() as session:
+            session.run(
+                CYPHER_CREATE_BRANCH,
+                {
+                    "thread_id": thread_id,
+                    "checkpoint_ns": "",
+                    "branch_id": fork_branch_id,
+                    "name": "fork-1",
+                    "fork_point_id": "cp-main",
+                },
+            )
+
+        # Verify main is active
+        with clean_neo4j_saver._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (t:Thread {thread_id: $thread_id})-[:ACTIVE_BRANCH]->(b:Branch)
+                RETURN b.name as name
+                """,
+                {"thread_id": thread_id},
+            )
+            record = result.single()
+            assert record["name"] == "main"
+
+        # Switch to fork branch
+        with clean_neo4j_saver._driver.session() as session:
+            session.run(
+                CYPHER_SET_ACTIVE_BRANCH,
+                {
+                    "thread_id": thread_id,
+                    "checkpoint_ns": "",
+                    "branch_id": fork_branch_id,
+                },
+            )
+
+        # Verify fork-1 is now active
+        with clean_neo4j_saver._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (t:Thread {thread_id: $thread_id})-[:ACTIVE_BRANCH]->(b:Branch)
+                RETURN b.name as name
+                """,
+                {"thread_id": thread_id},
+            )
+            record = result.single()
+            assert record["name"] == "fork-1", "Active branch should be switched to fork-1"
