@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langgraph-checkpoint-neo4j"
+version = "0.1.0"
+description = "Library with a Neo4j implementation of LangGraph checkpoint saver."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "William Lyon" }]
+keywords = ["neo4j", "langgraph", "langchain", "checkpointer", "persistence", "memory"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "langgraph-checkpoint>=2.0.0,<3.0.0",
+    "neo4j>=5.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/johnymontana/neo4j-langchain-checkpointer"
+Repository = "https://github.com/johnymontana/neo4j-langchain-checkpointer"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "testcontainers>=4.0.0",
+    "langgraph>=0.2.0",
+    "langchain-openai>=0.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["langgraph"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-v --cov=langgraph.checkpoint.neo4j"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "checkpointer-demo-backend"
+version = "0.1.0"
+description = "Demo FastAPI backend for Neo4j LangGraph checkpointer"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "langgraph>=0.2.0",
+    "langchain-openai>=0.1.0",
+    "neo4j>=5.0.0",
+    "langgraph-checkpoint-neo4j",
+]
+
+[tool.uv.sources]
+langgraph-checkpoint-neo4j = { path = "../..", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
