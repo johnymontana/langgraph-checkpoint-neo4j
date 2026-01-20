@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Box, Flex } from "@chakra-ui/react";
 import type { Message } from "@/lib/types";
 import { sendMessage } from "@/lib/api";
@@ -19,6 +19,11 @@ export function ChatInterface({
   onMessagesChange,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+
+  // Sync messages when initialMessages changes (e.g., after time travel)
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
   const [sending, setSending] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
 

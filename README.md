@@ -1,38 +1,89 @@
-# langgraph-checkpoint-neo4j
+# LangGraph Neo4j Checkpointer Demo
 
-Neo4j implementation of LangGraph checkpoint saver for persistent agent memory with branching time-travel support.
+Demo application showcasing the Neo4j checkpoint saver from [langchain-neo4j](https://github.com/langchain-ai/langchain-neo4j) (v0.8.0+) for persistent LangGraph agent memory with branching time-travel support.
 
 ## Features
 
-- **Persistent Agent Memory**: Store and retrieve LangGraph checkpoints in Neo4j
+- **Persistent Agent Memory**: Store and retrieve LangGraph checkpoints in Neo4j using `langchain-neo4j>=0.8.0`
 - **Graph-Native Data Model**: Leverages Neo4j relationships for efficient traversal
 - **Branching Time-Travel**: Fork conversations from any checkpoint without losing history
-- **Sync and Async Support**: Both synchronous and asynchronous implementations
-- **Human-Readable Storage**: Checkpoint data stored as JSON for easy debugging
-- **Demo Application**: Full-stack demo with FastAPI backend and Next.js frontend
+- **Full-Stack Demo**: FastAPI backend + Next.js frontend showcasing all features
 
-## Architecture
+## Quick Start
 
+### Using langchain-neo4j Checkpointer
+
+Install the package:
+
+```bash
+pip install langchain-neo4j>=0.8.0
 ```
-langgraph-checkpoint-neo4j/
-├── langgraph/checkpoint/neo4j/    # Main package
-│   ├── __init__.py                # Neo4jSaver (sync)
-│   ├── aio.py                     # AsyncNeo4jSaver (async)
-│   ├── base.py                    # BaseNeo4jSaver, Cypher queries
-│   ├── _internal.py               # Sync connection utilities
-│   └── _ainternal.py              # Async connection utilities
-├── tests/                         # Test suite
-│   ├── conftest.py                # Pytest fixtures with testcontainers
-│   ├── test_sync.py               # Sync checkpointer tests
-│   └── test_async.py              # Async checkpointer tests
-└── demo/                          # Demo application
-    ├── backend/                   # FastAPI + LangGraph agent
-    └── frontend/                  # Next.js + Chakra UI v3
+
+### Synchronous Usage
+
+```python
+from neo4j import GraphDatabase
+from langchain_neo4j import Neo4jSaver
+from langgraph.graph import StateGraph
+
+# Create Neo4j driver
+driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
+
+# Create and setup checkpointer
+checkpointer = Neo4jSaver(driver)
+checkpointer.setup()  # Creates indexes and constraints
+
+# Build your LangGraph agent
+graph = StateGraph(...)
+compiled = graph.compile(checkpointer=checkpointer)
+
+# Run with thread_id for persistence
+config = {"configurable": {"thread_id": "my-conversation"}}
+result = compiled.invoke({"messages": [("user", "Hello!")]}, config)
+
+# Continue the conversation (state is automatically restored)
+result = compiled.invoke({"messages": [("user", "What did I just say?")]}, config)
+```
+
+### Asynchronous Usage
+
+```python
+from neo4j import AsyncGraphDatabase
+from langchain_neo4j import AsyncNeo4jSaver
+
+# Create async driver
+driver = AsyncGraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
+
+# Create async checkpointer
+checkpointer = AsyncNeo4jSaver(driver)
+await checkpointer.setup()
+
+# Use with async LangGraph
+compiled = graph.compile(checkpointer=checkpointer)
+result = await compiled.ainvoke({"messages": [...]}, config)
+
+# Don't forget to close
+await checkpointer.close()
+```
+
+### Context Manager
+
+```python
+from langchain_neo4j import Neo4jSaver
+
+with Neo4jSaver.from_conn_string(
+    uri="bolt://localhost:7687",
+    user="neo4j",
+    password="password"
+) as checkpointer:
+    checkpointer.setup()
+    graph = builder.compile(checkpointer=checkpointer)
+    result = graph.invoke({"messages": [...]}, config)
 ```
 
 ## Neo4j Graph Data Model
 
-The checkpointer uses a proper graph model with nodes and relationships:
+The checkpointer uses a graph model with nodes and relationships:
 
 ```
                          ┌─────────────────────────────────────┐
@@ -76,97 +127,6 @@ The checkpointer uses a proper graph model with nodes and relationships:
 
 ![Demo app graph view](img/graph_view.png)
 
-## Installation
-
-```bash
-pip install langgraph-checkpoint-neo4j
-```
-
-Or with uv:
-
-```bash
-uv add langgraph-checkpoint-neo4j
-```
-
-## Quick Start
-
-### Synchronous Usage
-
-```python
-from neo4j import GraphDatabase
-from langgraph.checkpoint.neo4j import Neo4jSaver
-from langgraph.graph import StateGraph
-
-# Create Neo4j driver
-driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
-
-# Create and setup checkpointer
-checkpointer = Neo4jSaver(driver)
-checkpointer.setup()  # Creates indexes and constraints
-
-# Build your LangGraph agent
-graph = StateGraph(...)
-compiled = graph.compile(checkpointer=checkpointer)
-
-# Run with thread_id for persistence
-config = {"configurable": {"thread_id": "my-conversation"}}
-result = compiled.invoke({"messages": [("user", "Hello!")]}, config)
-
-# Continue the conversation (state is automatically restored)
-result = compiled.invoke({"messages": [("user", "What did I just say?")]}, config)
-```
-
-### Asynchronous Usage
-
-```python
-from neo4j import AsyncGraphDatabase
-from langgraph.checkpoint.neo4j.aio import AsyncNeo4jSaver
-
-# Create async driver
-driver = AsyncGraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
-
-# Create async checkpointer
-checkpointer = AsyncNeo4jSaver(driver)
-await checkpointer.setup()
-
-# Use with async LangGraph
-compiled = graph.compile(checkpointer=checkpointer)
-result = await compiled.ainvoke({"messages": [...]}, config)
-
-# Don't forget to close
-await checkpointer.close()
-```
-
-### Context Manager (Recommended)
-
-```python
-from langgraph.checkpoint.neo4j import Neo4jSaver
-
-with Neo4jSaver.from_conn_string(
-    uri="bolt://localhost:7687",
-    user="neo4j",
-    password="password"
-) as checkpointer:
-    checkpointer.setup()
-    graph = builder.compile(checkpointer=checkpointer)
-    result = graph.invoke({"messages": [...]}, config)
-```
-
-### Async Context Manager
-
-```python
-from langgraph.checkpoint.neo4j.aio import AsyncNeo4jSaver
-
-async with await AsyncNeo4jSaver.from_conn_string(
-    uri="bolt://localhost:7687",
-    user="neo4j",
-    password="password"
-) as checkpointer:
-    await checkpointer.setup()
-    graph = builder.compile(checkpointer=checkpointer)
-    result = await graph.ainvoke({"messages": [...]}, config)
-```
-
 ## Branching Time-Travel
 
 The checkpointer supports non-destructive time-travel through branching. When you "restore" to a previous checkpoint, a new branch is created instead of deleting history.
@@ -178,10 +138,10 @@ The checkpointer supports non-destructive time-travel through branching. When yo
 3. **HEAD**: Points to the latest checkpoint on the active branch
 4. **Forking**: Creates a new branch from any historical checkpoint
 
-### Using Branches Directly
+### Using Branches
 
 ```python
-from langgraph.checkpoint.neo4j.base import (
+from langchain_neo4j.checkpoint.base import (
     CYPHER_CREATE_BRANCH,
     CYPHER_SET_ACTIVE_BRANCH,
     CYPHER_LIST_BRANCHES,
@@ -223,21 +183,63 @@ with driver.session() as session:
 
 ## Demo Application
 
-The repository includes a full-stack demo application showcasing all features.
+This repository includes a full-stack demo application showcasing all features of the langchain-neo4j checkpointer.
 
 ![Demo app chat view](img/chat_view.png)
 
-### Running the Demo
+### Prerequisites
 
-```bash
-cd demo
-docker-compose up -d
+- Python 3.10+
+- Node.js 18+
+- [uv](https://docs.astral.sh/uv/) package manager
+- Neo4j 5.0+ (local instance or [Neo4j Aura](https://neo4j.com/cloud/aura/))
+- OpenAI API key
+
+### Environment Setup
+
+Create a `.env` file in the repository root (or copy from `.env.example`):
+
+```env
+# Neo4j connection settings
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-neo4j-password
+
+# OpenAI API key for the chat agent
+OPENAI_API_KEY=your-openai-api-key
 ```
 
-This starts:
-- **Neo4j**: http://localhost:7474 (browser) / bolt://localhost:7687
-- **Backend**: http://localhost:8000 (FastAPI)
-- **Frontend**: http://localhost:3000 (Next.js)
+Create a `.env.local` file in `demo/frontend/`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+```
+
+### Running the Demo
+
+**Install dependencies:**
+
+```bash
+make install
+```
+
+This installs both backend (Python) and frontend (Node.js) dependencies.
+
+**Start the backend:**
+
+```bash
+make backend
+```
+
+The API will be available at http://localhost:8000
+
+**Start the frontend:**
+
+```bash
+make frontend
+```
+
+The frontend will be available at http://localhost:3000
 
 ### Demo Features
 
@@ -247,18 +249,6 @@ This starts:
 - Fork from any checkpoint (time-travel)
 - Switch between branches
 - Tools: Calculator and Weather lookup
-
-### Environment Variables
-
-Create a `.env` file in `demo/`:
-
-```env
-NEO4J_URI=bolt://neo4j:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=password123
-OPENAI_API_KEY=your-openai-api-key
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
-```
 
 ### Backend API Endpoints
 
@@ -276,112 +266,38 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api
 | POST | `/api/history/{threadId}/time-travel` | Fork and switch (time-travel) |
 | GET | `/api/history/{threadId}/tree` | Get checkpoint tree |
 
-## Development
-
-### Prerequisites
-
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/) package manager
-- Docker (for running tests with testcontainers)
-
-### Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/johnymontana/langgraph-checkpoint-neo4j.git
-cd langgraph-checkpoint-neo4j
-
-# Install dependencies
-uv sync --all-extras
-
-# Run tests
-uv run pytest
-
-# Run tests with coverage
-uv run pytest --cov=langgraph.checkpoint.neo4j
-
-# Run specific test file
-uv run pytest tests/test_sync.py -v
-
-# Run branch-related tests only
-uv run pytest tests/test_sync.py -k "branch" -v
-```
-
-### Project Structure
+### Demo Architecture
 
 ```
-langgraph-checkpoint-neo4j/
-├── pyproject.toml              # Package configuration
-├── uv.lock                     # Dependency lock file
-├── .python-version             # Python version (3.10)
-├── langgraph/
-│   └── checkpoint/
-│       └── neo4j/
-│           ├── __init__.py     # Neo4jSaver class
-│           ├── aio.py          # AsyncNeo4jSaver class
-│           ├── base.py         # Base class, Cypher queries
-│           ├── _internal.py    # Sync utilities
-│           ├── _ainternal.py   # Async utilities
-│           └── py.typed        # PEP 561 marker
-├── tests/
-│   ├── conftest.py             # Test fixtures
-│   ├── test_sync.py            # 23 sync tests
-│   └── test_async.py           # Async tests
+.
+├── .env                        # Neo4j and OpenAI credentials
+├── .env.example                # Example environment file
+├── Makefile                    # Build and run commands
 └── demo/
-    ├── docker-compose.yml
     ├── backend/
     │   ├── pyproject.toml
     │   └── app/
-    │       ├── main.py         # FastAPI app
+    │       ├── main.py             # FastAPI app
+    │       ├── config.py           # Settings from environment
     │       ├── routers/
     │       │   ├── threads.py
     │       │   ├── messages.py
-    │       │   └── history.py  # Branch/time-travel endpoints
+    │       │   └── history.py      # Branch/time-travel endpoints
     │       └── agent/
-    │           ├── graph.py    # LangGraph agent
-    │           └── tools.py    # Calculator, Weather tools
+    │           ├── graph.py        # LangGraph agent
+    │           └── tools.py        # Calculator, Weather tools
     └── frontend/
         ├── package.json
-        ├── app/                # Next.js pages
+        ├── .env.local              # API URL config
+        ├── app/                    # Next.js pages
         ├── components/
         │   ├── ChatInterface.tsx
         │   ├── MessageList.tsx
-        │   ├── ThreadList.tsx
-        │   └── HistoryTimeline.tsx  # Branch UI
+        │   ├── MessageInput.tsx
+        │   └── HistoryTimeline.tsx # Branch UI
         └── lib/
-            ├── api.ts          # API client
-            └── types.ts        # TypeScript types
-```
-
-### Running Tests
-
-Tests use [testcontainers](https://testcontainers.com/) to spin up a real Neo4j instance:
-
-```bash
-# Run all tests
-uv run pytest
-
-# Run with verbose output
-uv run pytest -v
-
-# Run specific test class
-uv run pytest tests/test_sync.py::TestNeo4jSaver -v
-
-# Run with coverage report
-uv run pytest --cov=langgraph.checkpoint.neo4j --cov-report=html
-```
-
-### Code Quality
-
-```bash
-# Format code
-uv run ruff format .
-
-# Lint code
-uv run ruff check .
-
-# Type checking
-uv run mypy langgraph/
+            ├── api.ts              # API client
+            └── types.ts            # TypeScript types
 ```
 
 ## Cypher Query Reference
@@ -416,42 +332,12 @@ UNION ALL
 MATCH (b:Branch) RETURN 'Branches' as type, count(b) as count
 ```
 
-## Configuration
-
-### Neo4jSaver Options
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `driver` | `Driver` | Neo4j driver instance |
-| `database` | `str \| None` | Database name (default: Neo4j default) |
-
-### Connection String Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `uri` | `str` | Neo4j connection URI |
-| `user` | `str` | Neo4j username |
-| `password` | `str` | Neo4j password |
-| `database` | `str \| None` | Database name |
-
 ## Requirements
 
 - Python >= 3.10
 - Neo4j >= 5.0
-- langgraph-checkpoint >= 2.0.0
-- neo4j (Python driver) >= 5.0.0
+- langchain-neo4j >= 0.8.0
 
 ## License
 
 MIT
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests (`uv run pytest`)
-4. Commit your changes (`git commit -m 'Add amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request

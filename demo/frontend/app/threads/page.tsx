@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, forwardRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -19,6 +19,24 @@ import {
 import { LuMessageSquare, LuPlus, LuTrash2 } from "react-icons/lu";
 import type { Thread } from "@/lib/types";
 import { listThreads, createThread, deleteThread } from "@/lib/api";
+
+// Wrap icons with forwardRef for Chakra UI compatibility
+const MessageSquareIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuMessageSquare>
+>((props, ref) => <LuMessageSquare ref={ref} {...props} />);
+MessageSquareIcon.displayName = "MessageSquareIcon";
+
+const PlusIcon = forwardRef<SVGSVGElement, React.ComponentProps<typeof LuPlus>>(
+  (props, ref) => <LuPlus ref={ref} {...props} />,
+);
+PlusIcon.displayName = "PlusIcon";
+
+const TrashIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuTrash2>
+>((props, ref) => <LuTrash2 ref={ref} {...props} />);
+TrashIcon.displayName = "TrashIcon";
 
 export default function ThreadsPage() {
   const router = useRouter();
@@ -86,7 +104,7 @@ export default function ThreadsPage() {
             onClick={handleCreateThread}
             loading={creating}
           >
-            <LuPlus /> New Conversation
+            <PlusIcon /> New Conversation
           </Button>
         </Flex>
 
@@ -94,7 +112,7 @@ export default function ThreadsPage() {
           <Card.Root>
             <Card.Body>
               <Stack align="center" gap="4" py="8">
-                <LuMessageSquare size={48} />
+                <MessageSquareIcon size={48} />
                 <Text color="fg.muted">No conversations yet</Text>
                 <Button colorPalette="blue" onClick={handleCreateThread}>
                   Start your first conversation
@@ -123,7 +141,7 @@ export default function ThreadsPage() {
                   <Stack gap="3">
                     <HStack justify="space-between">
                       <HStack gap="2">
-                        <LuMessageSquare />
+                        <MessageSquareIcon />
                         <Text fontWeight="medium" truncate maxW="200px">
                           {thread.name || thread.id.slice(0, 8) + "..."}
                         </Text>
@@ -135,7 +153,7 @@ export default function ThreadsPage() {
                         size="sm"
                         onClick={(e) => handleDeleteThread(thread.id, e)}
                       >
-                        <LuTrash2 />
+                        <TrashIcon />
                       </IconButton>
                     </HStack>
                     <Box>

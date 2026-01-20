@@ -6,9 +6,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from langchain_neo4j import AsyncNeo4jSaver
 from neo4j import AsyncGraphDatabase
-
-from langgraph.checkpoint.neo4j.aio import AsyncNeo4jSaver
 
 from .config import settings
 from .models import HealthResponse

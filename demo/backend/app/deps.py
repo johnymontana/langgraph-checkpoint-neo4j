@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from fastapi import Request
-
-from langgraph.checkpoint.neo4j.aio import AsyncNeo4jSaver
+from langchain_neo4j import AsyncNeo4jSaver
 
 
 async def get_checkpointer(request: Request) -> AsyncNeo4jSaver:
