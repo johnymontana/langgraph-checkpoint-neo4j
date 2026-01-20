@@ -15,11 +15,8 @@ dependencies = [
     "langgraph>=0.2.0",
     "langchain-openai>=0.1.0",
     "neo4j>=5.0.0",
-    "langgraph-checkpoint-neo4j",
+    "langchain-neo4j>=0.8.0",
 ]
-
-[tool.uv.sources]
-langgraph-checkpoint-neo4j = { path = "../..", editable = true }
 
 [dependency-groups]
 dev = [

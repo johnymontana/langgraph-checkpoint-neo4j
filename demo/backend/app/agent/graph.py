@@ -7,11 +7,10 @@ from operator import add
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
+from langchain_neo4j import AsyncNeo4jSaver
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
-
-from langgraph.checkpoint.neo4j.aio import AsyncNeo4jSaver
 
 from ..config import settings
 from .tools import TOOLS

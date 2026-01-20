@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, forwardRef } from "react";
 import {
   Badge,
   Box,
@@ -27,6 +27,36 @@ import {
   switchBranch,
   timeTravel,
 } from "@/lib/api";
+
+// Wrap icons with forwardRef for Chakra UI compatibility
+const ClockIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuClock>
+>((props, ref) => <LuClock ref={ref} {...props} />);
+ClockIcon.displayName = "ClockIcon";
+
+const GitBranchIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuGitBranch>
+>((props, ref) => <LuGitBranch ref={ref} {...props} />);
+GitBranchIcon.displayName = "GitBranchIcon";
+
+const HistoryIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuHistory>
+>((props, ref) => <LuHistory ref={ref} {...props} />);
+HistoryIcon.displayName = "HistoryIcon";
+
+const RefreshIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuRefreshCw>
+>((props, ref) => <LuRefreshCw ref={ref} {...props} />);
+RefreshIcon.displayName = "RefreshIcon";
+
+const CloseIcon = forwardRef<SVGSVGElement, React.ComponentProps<typeof LuX>>(
+  (props, ref) => <LuX ref={ref} {...props} />,
+);
+CloseIcon.displayName = "CloseIcon";
 
 interface HistoryTimelineProps {
   threadId: string;
@@ -120,7 +150,7 @@ export function HistoryTimeline({
     >
       <HStack justify="space-between" p="4" borderBottomWidth="1px">
         <HStack gap="2">
-          <LuHistory />
+          <HistoryIcon />
           <Heading size="sm">History</Heading>
         </HStack>
         <HStack gap="1">
@@ -130,7 +160,7 @@ export function HistoryTimeline({
             size="sm"
             onClick={loadData}
           >
-            <LuRefreshCw />
+            <RefreshIcon />
           </IconButton>
           <IconButton
             aria-label="Close"
@@ -138,7 +168,7 @@ export function HistoryTimeline({
             size="sm"
             onClick={onClose}
           >
-            <LuX />
+            <CloseIcon />
           </IconButton>
         </HStack>
       </HStack>
@@ -155,7 +185,7 @@ export function HistoryTimeline({
             {branches.length > 0 && (
               <Box>
                 <HStack gap="2" mb="2">
-                  <LuGitBranch />
+                  <GitBranchIcon />
                   <Text fontWeight="medium" textStyle="sm">
                     Branches ({branches.length})
                   </Text>
@@ -212,7 +242,7 @@ export function HistoryTimeline({
             {/* Checkpoints */}
             <Box>
               <HStack gap="2" mb="2">
-                <LuClock />
+                <ClockIcon />
                 <Text fontWeight="medium" textStyle="sm">
                   Checkpoints
                   {activeBranch && (

@@ -6,9 +6,8 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-
-from langgraph.checkpoint.neo4j.aio import AsyncNeo4jSaver
-from langgraph.checkpoint.neo4j.base import (
+from langchain_neo4j import AsyncNeo4jSaver
+from langchain_neo4j.checkpoint.base import (
     CYPHER_CREATE_BRANCH,
     CYPHER_GET_CHECKPOINT_TREE,
     CYPHER_LIST_BRANCHES,

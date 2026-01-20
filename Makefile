@@ -1,34 +1,20 @@
-.PHONY: install test lint format typecheck clean
+.PHONY: install install-backend install-frontend backend frontend
 
-install:
-	uv sync --all-extras
+# Install all dependencies
+install: install-backend install-frontend
 
-test:
-	uv run pytest -v
+# Install backend dependencies
+install-backend:
+	cd demo/backend && uv sync
 
-test-cov:
-	uv run pytest -v --cov=langgraph.checkpoint.neo4j --cov-report=term-missing
+# Install frontend dependencies
+install-frontend:
+	cd demo/frontend && npm install
 
-lint:
-	uv run ruff check .
+# Run backend server
+backend:
+	cd demo/backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-format:
-	uv run ruff format .
-	uv run ruff check --fix .
-
-typecheck:
-	uv run mypy langgraph/checkpoint/neo4j
-
-clean:
-	rm -rf .pytest_cache .coverage .mypy_cache __pycache__ dist build *.egg-info
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-
-# Demo commands
-demo-up:
-	docker-compose -f docker-compose.dev.yml up -d
-
-demo-down:
-	docker-compose -f docker-compose.dev.yml down
-
-demo-logs:
-	docker-compose -f docker-compose.dev.yml logs -f
+# Run frontend dev server
+frontend:
+	cd demo/frontend && npm run dev

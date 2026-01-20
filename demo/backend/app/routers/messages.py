@@ -8,8 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
-from langgraph.checkpoint.neo4j.aio import AsyncNeo4jSaver
+from langchain_neo4j import AsyncNeo4jSaver
 
 from ..agent.graph import create_agent_graph
 from ..deps import get_checkpointer

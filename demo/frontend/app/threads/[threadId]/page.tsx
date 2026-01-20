@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, forwardRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Box,
@@ -22,6 +22,31 @@ import type { Message, Thread } from "@/lib/types";
 import { getThread, getMessages, deleteThread } from "@/lib/api";
 import { ChatInterface } from "@/components/ChatInterface";
 import { HistoryTimeline } from "@/components/HistoryTimeline";
+
+// Wrap icons with forwardRef for Chakra UI compatibility
+const ArrowLeftIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuArrowLeft>
+>((props, ref) => <LuArrowLeft ref={ref} {...props} />);
+ArrowLeftIcon.displayName = "ArrowLeftIcon";
+
+const HistoryIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuHistory>
+>((props, ref) => <LuHistory ref={ref} {...props} />);
+HistoryIcon.displayName = "HistoryIcon";
+
+const MessageSquareIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuMessageSquare>
+>((props, ref) => <LuMessageSquare ref={ref} {...props} />);
+MessageSquareIcon.displayName = "MessageSquareIcon";
+
+const TrashIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuTrash2>
+>((props, ref) => <LuTrash2 ref={ref} {...props} />);
+TrashIcon.displayName = "TrashIcon";
 
 export default function ThreadPage() {
   const params = useParams();
@@ -97,10 +122,10 @@ export default function ThreadPage() {
               variant="ghost"
               onClick={() => router.push("/threads")}
             >
-              <LuArrowLeft />
+              <ArrowLeftIcon />
             </IconButton>
             <HStack gap="2">
-              <LuMessageSquare />
+              <MessageSquareIcon />
               <Heading size="md">{threadId.slice(0, 8)}...</Heading>
             </HStack>
           </HStack>
@@ -110,7 +135,7 @@ export default function ThreadPage() {
               size="sm"
               onClick={() => setShowHistory(!showHistory)}
             >
-              <LuHistory /> History
+              <HistoryIcon /> History
             </Button>
             <IconButton
               aria-label="Delete thread"
@@ -118,7 +143,7 @@ export default function ThreadPage() {
               colorPalette="red"
               onClick={handleDelete}
             >
-              <LuTrash2 />
+              <TrashIcon />
             </IconButton>
           </HStack>
         </Flex>

@@ -1,8 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef } from "react";
 import { Box, Button, Flex, Textarea } from "@chakra-ui/react";
 import { LuSend } from "react-icons/lu";
+
+// Wrap icon with forwardRef for Chakra UI compatibility
+const SendIcon = forwardRef<SVGSVGElement, React.ComponentProps<typeof LuSend>>(
+  (props, ref) => <LuSend ref={ref} {...props} />,
+);
+SendIcon.displayName = "SendIcon";
 
 interface MessageInputProps {
   onSend: (message: string) => void;
@@ -62,7 +68,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
           disabled={!message.trim() || disabled}
           alignSelf="flex-end"
         >
-          <LuSend />
+          <SendIcon />
         </Button>
       </Flex>
     </Box>

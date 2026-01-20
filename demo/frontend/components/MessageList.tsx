@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, forwardRef } from "react";
 import {
   Box,
   Card,
@@ -14,6 +14,23 @@ import {
 } from "@chakra-ui/react";
 import { LuBot, LuUser, LuWrench } from "react-icons/lu";
 import type { Message } from "@/lib/types";
+
+// Wrap icons with forwardRef for Chakra UI compatibility
+const BotIcon = forwardRef<SVGSVGElement, React.ComponentProps<typeof LuBot>>(
+  (props, ref) => <LuBot ref={ref} {...props} />,
+);
+BotIcon.displayName = "BotIcon";
+
+const UserIcon = forwardRef<SVGSVGElement, React.ComponentProps<typeof LuUser>>(
+  (props, ref) => <LuUser ref={ref} {...props} />,
+);
+UserIcon.displayName = "UserIcon";
+
+const WrenchIcon = forwardRef<
+  SVGSVGElement,
+  React.ComponentProps<typeof LuWrench>
+>((props, ref) => <LuWrench ref={ref} {...props} />);
+WrenchIcon.displayName = "WrenchIcon";
 
 interface MessageListProps {
   messages: Message[];
@@ -62,7 +79,7 @@ export function MessageList({ messages, streamingContent }: MessageListProps) {
             <Card.Body py="2" px="3">
               <HStack gap="2">
                 <Icon color="orange.500">
-                  <LuWrench />
+                  <WrenchIcon />
                 </Icon>
                 <Text fontWeight="medium" textStyle="sm">
                   {call.name}
@@ -89,7 +106,7 @@ export function MessageList({ messages, streamingContent }: MessageListProps) {
             <Card.Body py="2" px="3">
               <HStack gap="2">
                 <Icon color="green.500">
-                  <LuWrench />
+                  <WrenchIcon />
                 </Icon>
                 <Text textStyle="sm" fontWeight="medium">
                   Tool Result
@@ -111,7 +128,7 @@ export function MessageList({ messages, streamingContent }: MessageListProps) {
         <HStack align="start" gap="3" maxW="80%">
           {!isUser && (
             <Circle size="8" bg="blue.500" color="white" flexShrink={0}>
-              <LuBot size={16} />
+              <BotIcon size={16} />
             </Circle>
           )}
           <Card.Root
@@ -125,7 +142,7 @@ export function MessageList({ messages, streamingContent }: MessageListProps) {
           </Card.Root>
           {isUser && (
             <Circle size="8" bg="gray.500" color="white" flexShrink={0}>
-              <LuUser size={16} />
+              <UserIcon size={16} />
             </Circle>
           )}
         </HStack>
@@ -140,7 +157,7 @@ export function MessageList({ messages, streamingContent }: MessageListProps) {
           <Stack align="center" gap="4">
             <Circle size="16" bg="blue.100">
               <Icon color="blue.500" boxSize="8">
-                <LuBot />
+                <BotIcon />
               </Icon>
             </Circle>
             <Text color="fg.muted" textAlign="center">
@@ -157,7 +174,7 @@ export function MessageList({ messages, streamingContent }: MessageListProps) {
             <Flex justify="flex-start" mb="4">
               <HStack align="start" gap="3" maxW="80%">
                 <Circle size="8" bg="blue.500" color="white" flexShrink={0}>
-                  <LuBot size={16} />
+                  <BotIcon size={16} />
                 </Circle>
                 <Card.Root bg="bg.subtle">
                   <Card.Body py="2" px="3">
